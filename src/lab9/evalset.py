@@ -29,7 +29,7 @@ REQUIRED = ("item_id", "claim_id", "failure_modes", "provenance", "split", "eval
 
 FM_CODE = re.compile(r"FM-\d{2}")
 FAILURE_MODES_BY_MATRIX_ID = {
-    "T01": ["FM-03"],
+    "T01": ["FM-03", "FM-07"],
     "T02": ["FM-03"],
     "T03": ["FM-04"],
     "T04": ["FM-02"],

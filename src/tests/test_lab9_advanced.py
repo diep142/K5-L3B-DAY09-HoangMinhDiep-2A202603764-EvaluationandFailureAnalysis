@@ -26,9 +26,12 @@ def test_pass_hat_k(stats, n, c, k, want):
 
 
 def test_pass_k_rejects_bad_args(stats):
-    for args in [(5, 6, 1), (5, 2, 0), (3, 1, 4)]:
+    for args in [(5, 6, 1), (5, 2, 0), (3, 1, 4), (0, 0, 0), (5, -1, 1), (5, 2, -1),
+                 (5, 2.5, 1), (5, 2, True)]:
         with pytest.raises(ValueError):
             stats.pass_at_k(*args)
+        with pytest.raises(ValueError):
+            stats.pass_hat_k(*args)
 
 
 def _report(rows, metrics, items=4, seeds=(1, 2)):
@@ -74,3 +77,67 @@ def test_slice_check_blocks_a_slice_below_floor():
     spec = dict(SPEC, slices=[{"name": "denial", "metric": "pass_rate", "min": 0.9, "blocking": True}])
     blocked, _ = gate.slice_check(_report(rows, {"pass_rate": 0.75}), base, spec)
     assert blocked == ["slice:denial/pass_rate"]
+
+
+def test_integrity_rejects_duplicate_rows_and_evaluator_failures():
+    from lab9 import gate
+
+    base = _report(copy.deepcopy(ROWS), {"pass_rate": 1.0})
+    duplicate = copy.deepcopy(base)
+    duplicate["rows"][0] = copy.deepcopy(duplicate["rows"][1])
+    assert gate.integrity_check(duplicate, base, SPEC)
+    crashed = copy.deepcopy(base)
+    crashed["evaluator_failures"] = ["E-001:grader:error"]
+    assert gate.integrity_check(crashed, base, SPEC)
+
+
+def test_integrity_rejects_slice_relabel_and_forged_metrics():
+    from lab9 import gate
+
+    base = _report(copy.deepcopy(ROWS), {"pass_rate": 1.0})
+    relabelled = copy.deepcopy(base)
+    for row in relabelled["rows"]:
+        if row["item_id"] == "E-000":
+            row["slices"] = []
+    assert gate.integrity_check(relabelled, base, SPEC)
+    forged = copy.deepcopy(base)
+    forged["rows"][0]["pass_rate"] = False
+    assert gate.integrity_check(forged, base, SPEC)
+
+
+def test_ratchet_rejects_removed_slice_and_regression_check():
+    from lab9 import gate
+
+    base = _report(copy.deepcopy(ROWS), {"pass_rate": 1.0})
+    original = copy.deepcopy(SPEC)
+    original["metrics"][0]["threshold"]["no_significant_drop"] = True
+    original["slices"] = [{"name": "denial", "metric": "pass_rate", "min": 0.9,
+                           "no_significant_drop": True, "blocking": True}]
+    loose = copy.deepcopy(original)
+    del loose["metrics"][0]["threshold"]["no_significant_drop"]
+    loose["slices"] = []
+    assert gate.integrity_check(base, base, loose, original)
+    changed_version = copy.deepcopy(original)
+    changed_version["eval_set_version"] = "v3"
+    assert gate.integrity_check(base, base, changed_version, original)
+
+
+def test_slice_check_rejects_missing_slice():
+    from lab9 import gate
+
+    base = _report(copy.deepcopy(ROWS), {"pass_rate": 1.0})
+    spec = dict(SPEC, slices=[{"name": "missing", "metric": "pass_rate", "min": 0.9, "blocking": True}])
+    blocked, _ = gate.slice_check(base, base, spec)
+    assert blocked == ["slice:missing/pass_rate"]
+
+
+def test_ci_check_accepts_derived_pass_hat_without_a_grader():
+    from lab9 import ci_check
+
+    report = {"shape": "swarm", "manifest": {"eval_set_sha": "x"},
+              "metrics": {"pass_hat_5": 1.0, "reply_amount_matches_ledger": 1.0}}
+    spec = {"pass_k": [5], "metrics": [
+        {"id": "pass_hat_5", "kind": "capability", "blocking": True},
+        {"id": "reply_amount_matches_ledger", "kind": "capability", "blocking": True},
+    ]}
+    assert ci_check.check(report, report, spec) == []

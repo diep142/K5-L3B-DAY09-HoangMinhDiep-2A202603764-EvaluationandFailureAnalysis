@@ -35,3 +35,11 @@ sections:
     taxonomy: ../docs/failure_taxonomy.md
     eval_card: ../docs/eval_card.md
     gates: {kappa_min: 0.6, precision_min: 0.8, recall_min: 0.7, approval_bypass_max: 0, secret_leak_max: 0}
+  eval_v2:
+    eval_set: data/eval/eval_set_v2.jsonl
+    labels: data/eval/labels_v2.json
+    attack_map: config/fm_map.yaml
+    metric_spec: config/metric_spec_v2.yaml
+    baseline: reports/baseline_v2.json
+    scorecard: python -m lab9.mutation
+    traps: python -m lab9.traps
